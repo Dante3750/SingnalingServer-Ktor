@@ -1,47 +1,76 @@
-# WebRTC Video Call & Ktor Signaling Server
+# WebRTC Video Call & Ktor Signaling Monorepo
 
-A professional-grade WebRTC implementation featuring a Ktor-based signaling server and a modern Android client built with Jetpack Compose, Clean Architecture, and Kotlin Coroutines.
+[![Platform](https://img.shields.io/badge/Platform-Android-brightgreen.svg)](https://developer.android.com/android)
+[![Ktor](https://img.shields.io/badge/Backend-Ktor-blue.svg)](https://ktor.io/)
+[![WebRTC](https://img.shields.io/badge/RealTime-WebRTC-orange.svg)](https://webrtc.org/)
 
-## 🚀 Key Features
+A production-grade WebRTC implementation featuring a high-performance **Ktor-based signaling server** and a modern **Android client** built with Jetpack Compose, Clean Architecture, and Kotlin Coroutines.
 
-- **P2P Video & Audio**: Real-time communication using Google's WebRTC library.
-- **Ktor Signaling**: High-performance WebSocket signaling server for session negotiation.
-- **Perfect Negotiation**: Implemented the "Polite/Impolite" peer pattern to handle glare and state collisions gracefully.
-- **WebRTC Data Channels**: 
-    - **P2P Hangup**: Near-zero latency call termination.
-    - **Emoji Chat**: Direct peer-to-peer data transfer for interactive emojis.
-- **Media Optimization (QoS)**:
-    - **Bitrate Capping**: Limited at 2Mbps for mobile stability.
-    - **Degradation Preference**: Set to `MAINTAIN_FRAMERATE` to ensure fluid 30fps video even on poor networks.
-    - **Adaptive Bitrate (ABR)**: Dynamic quality adjustment based on network conditions.
-- **Clean Architecture**: Android client follows MVVM pattern with `SharedFlow` for reactive event handling.
-- **Resilient Networking**: Automatic exponential backoff and reconnection logic for the signaling layer.
+---
 
-## 🛠 Tech Stack
+## 🏗 System Architecture
 
-### Android Client
-- **UI**: Jetpack Compose
-- **Concurrency**: Kotlin Coroutines & Flow
-- **Networking**: OkHttp (WebSockets)
-- **WebRTC**: `io.getstream:stream-webrtc-android` (Modern wrapper)
-- **Dependency Management**: Gradle Version Catalog (libs.versions.toml)
+This project follows a **Monorepo** structure, ensuring that the signaling protocols and data models between the client and server remain perfectly synchronized.
 
-### Signaling Server
-- **Framework**: Ktor (Kotlin)
-- **Transport**: WebSockets
-- **Serialization**: Kotlinx Serialization
+```mermaid
+sequenceDiagram
+    participant Peer A (Realme)
+    participant Ktor Server
+    participant Peer B (Samsung)
+
+    Note over Peer A, Peer B: Signaling Phase (WebSocket)
+    Peer A->>Ktor Server: Offer (SDP)
+    Ktor Server->>Peer B: Relay Offer
+    Peer B->>Ktor Server: Answer (SDP)
+    Ktor Server->>Peer A: Relay Answer
+    
+    Note over Peer A, Peer B: ICE Gathering (Trickle ICE)
+    Peer A->>Ktor Server: ICE Candidate
+    Ktor Server->>Peer B: Relay ICE
+    
+    Note over Peer A, Peer B: P2P Media Phase (Direct)
+    Peer A<<-->>Peer B: Video/Audio Stream
+    Peer A<<-->>Peer B: Data Channel (Emoji/Hangup)
+```
+
+---
+
+## 🚀 Technical Highlights
+
+### 🛡 Perfect Negotiation Pattern
+Implemented the **"Polite/Impolite"** peer pattern to handle **Glare** (signaling collisions). By assigning roles based on User ID tie-breaking, the app gracefully handles asynchronous renegotiation (e.g., adding a screen share track or switching cameras) without state corruption.
+
+### ⚡ WebRTC Data Channels
+Leverages direct P2P data pipes for low-latency non-media signaling:
+- **Zero-Latency Hangup**: Call termination is synchronized via P2P data channels to prevent "frozen screen" artifacts.
+- **Interactive Emoji Chat**: High-speed, direct peer-to-peer emoji transfer for a reactive user experience.
+
+### 📊 Media Optimization (QoS)
+- **Bitrate Capping**: Outgoing streams are limited to **2Mbps** to ensure stability on varying mobile networks.
+- **Degradation Preference**: Configured to `MAINTAIN_FRAMERATE`. The engine prioritizes fluid 30fps motion over resolution during bandwidth drops.
+- **Adaptive Bitrate (ABR)**: Real-time quality adjustment using Google Congestion Control (GCC).
+
+### 📱 Android Clean Architecture
+- **UI**: 100% Jetpack Compose with reactive state-driven components.
+- **Signaling Layer**: Uses **Kotlin SharedFlow** for a reactive, thread-safe message stream.
+- **Resource Management**: Fully lifecycle-aware WebRTC engine disposal to prevent memory leaks and camera lock-ups.
+
+---
 
 ## 📦 Project Structure
 
 ```text
 .
 ├── app/                  # Android Front-end Application
-│   └── src/main/java     # Clean Architecture implementation
+│   ├── src/main/java     # Clean Architecture implementation
+│   └── src/main/res      # Compose UI resources
 └── signaling-server/     # Ktor Signaling Back-end
-    └── src/main/kotlin   # WebSocket routing and connection registry
+    └── src/main/kotlin   # WebSocket routing and participant registry
 ```
 
-## 🏃 How to Run
+---
+
+## 🏃 Getting Started
 
 ### 1. Start the Signaling Server
 1. Navigate to the `signaling-server` directory.
@@ -51,19 +80,22 @@ A professional-grade WebRTC implementation featuring a Ktor-based signaling serv
    ```
 3. The server will start on `0.0.0.0:8887`.
 
-### 2. Configure and Run the Android App
-1. Build and install the app on two physical devices.
-2. Ensure both devices are on the **same WiFi network** as your computer.
-3. Open the app and tap the **Pencil (Edit) icon** in the top bar.
-4. Enter your computer's **Local IP Address** (e.g., `192.168.1.6`).
-5. Ensure the **Room ID** is identical on both phones (e.g., `test-room`).
-6. Once the status dot turns **Green (Online)**:
-    - **Phone A**: Tap **"Start Call"**.
-    - **Phone B**: Tap **"Accept"** on the incoming call popup.
+### 2. Run the Android App
+1. Build and install the app on two physical devices (Realme & Samsung).
+2. Ensure both are on the **same WiFi network** as your computer.
+3. Tap the **Pencil icon** in the app header and enter your computer's local IP.
+4. Set the **Room ID** to be identical on both devices.
+5. Tap **"Start Call"** on one phone and **"Accept"** on the other.
+
+---
 
 ## 🔍 Troubleshooting
-- **Red Dot (Offline)**: Check your Windows Firewall. Ensure port `8887` is allowed for incoming TCP connections.
-- **Frozen Video**: Ensure both phones are on a stable network. Check Logcat with tag `WebRTC-SIG` for signaling errors.
+
+- **Connection Failure**: Verify that your computer's Firewall allows incoming TCP connections on port `8887`.
+- **Camera Issues**: Ensure you have granted Camera and Microphone permissions on both devices.
+- **Logging**: Filter Logcat with tags `WebRTC-SIG` (signaling) and `WebRTC-Session` (media) for deep debugging.
+
+---
 
 ## 📝 License
-MIT License - feel free to use this for your interviews or projects!
+MIT License - Feel free to use this for professional interviews or learning purposes.
