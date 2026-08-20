@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ktor Signaling Tester</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f9; }
+        .card { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; width: 90%; max-width: 600px; }
+        #status { font-size: 20px; font-weight: bold; margin: 10px; padding: 10px; border-radius: 5px; }
+        .online { color: #2ecc71; background: #e8f8f0; border: 2px solid #2ecc71; }
+        .offline { color: #e74c3c; background: #fdf2f2; border: 2px solid #e74c3c; }
+        #log { font-family: monospace; font-size: 11px; height: 200px; overflow-y: auto; background: white; padding: 10px; border: 1px solid #ccc; text-align: left; margin-top: 20px; }
+        input { padding: 8px; width: 80%; margin-bottom: 10px; }
+        button { padding: 10px 20px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Ktor Signaling Tester</h1>
+        <div id="status" class="offline">STATUS: DISCONNECTED</div>
+        <input type="text" id="url" value="ws://localhost:8887/ws">
+        <button onclick="connect()">Connect & Join</button>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        let socket;
+        const logDiv = document.getElementById('log');
+        const statusDiv = document.getElementById('status');
+
+        // Stable sessionId for the lifetime of this tab/session
+        let sessionId = localStorage.getItem('sessionId');
+        if (!sessionId) {
+            sessionId = 'sess-' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('sessionId', sessionId);
+        }
+
+        let userId = 'user-' + Math.floor(Math.random()*1000);
+
+        function addLog(msg, color='black') {
+            logDiv.innerHTML += `<div style="color:${color}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function connect() {
+            const url = document.getElementById('url').value;
+            addLog(`Connecting to ${url}...`);
+            socket = new WebSocket(url);
+
+            socket.onopen = () => {
+                statusDiv.innerText = 'STATUS: ONLINE';
+                statusDiv.className = 'online';
+                addLog('Connected!', 'green');
+
+                // 1. Send Hello first
+                const hello = {
+                    sessionId: sessionId,
+                    userId: userId,
+                    displayName: "User " + userId
+                };
+                addLog('Sending hello: ' + JSON.stringify(hello));
+                socket.send(JSON.stringify(hello));
+            };
+
+            socket.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                addLog('Received: ' + e.data, 'blue');
+
+                // 2. Once hello is acked, join room
+                if (data.type === 'hello-ack') {
+                    const joinMsg = { type: 'join', roomId: 'test-room' };
+                    addLog('Sending join: ' + JSON.stringify(joinMsg));
+                    socket.send(JSON.stringify(joinMsg));
+                }
+            };
+
+            socket.onclose = () => {
+                statusDiv.innerText = 'STATUS: OFFLINE';
+                statusDiv.className = 'offline';
+                addLog('Disconnected.', 'red');
+
+                // Simple auto-reconnect logic to test grace period
+                addLog('Attempting reconnect in 2s...');
+                setTimeout(connect, 2000);
+            };
+            socket.onerror = (e) => addLog('Error connecting.', 'red');
+        }
+    </script>
+</body>
+</html>
